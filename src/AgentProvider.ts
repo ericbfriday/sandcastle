@@ -21,7 +21,11 @@ const TOOL_ARG_FIELDS: Record<string, string> = {
 const extractErrorMessage = (obj: any): string | undefined => {
   const err = obj.error;
   if (typeof err === "string") return err;
-  if (typeof err === "object" && err !== null && typeof err.message === "string") {
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    typeof err.message === "string"
+  ) {
     return err.message;
   }
   if (typeof obj.message === "string") return obj.message;
@@ -325,6 +329,46 @@ export const opencode = (
   buildInteractiveArgs({ prompt }: AgentCommandOptions): string[] {
     const args = ["opencode", "--model", model];
     if (prompt) args.push("-p", prompt);
+    return args;
+  },
+
+  parseStreamLine(_line: string): ParsedStreamEvent[] {
+    return [];
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Kiro agent provider
+// ---------------------------------------------------------------------------
+
+/** Options for the kiro agent provider. */
+export interface KiroOptions {
+  /** Environment variables injected by this agent provider. */
+  readonly env?: Record<string, string>;
+}
+
+export const kiro = (model: string, options?: KiroOptions): AgentProvider => ({
+  name: "kiro",
+  env: options?.env ?? {},
+  captureSessions: false,
+
+  buildPrintCommand({
+    prompt,
+    dangerouslySkipPermissions,
+    resumeSession,
+  }: AgentCommandOptions): PrintCommand {
+    const trustFlag = dangerouslySkipPermissions ? " --trust-all-tools" : "";
+    const resumeFlag = resumeSession
+      ? ` --resume-id ${shellEscape(resumeSession)}`
+      : "";
+    return {
+      command: `kiro-cli chat --no-interactive${trustFlag} --model ${shellEscape(model)}${resumeFlag} ${shellEscape(prompt)}`,
+    };
+  },
+
+  buildInteractiveArgs({ prompt }: AgentCommandOptions): string[] {
+    const args = ["kiro-cli", "chat", "--model", model];
+    if (prompt) args.push(prompt);
     return args;
   },
 
