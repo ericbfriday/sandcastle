@@ -138,7 +138,7 @@ export interface WorktreeRunOptions {
   readonly hooks?: SandboxHooks;
   /** Environment variables to inject into the sandbox. */
   readonly env?: Record<string, string>;
-  /** Resume a prior Claude Code session by ID. The session JSONL must exist on the host. Incompatible with maxIterations > 1. */
+  /** Resume a prior agent session by ID. For providers that capture sessions to host (`claudeCode()`), the session JSONL must exist on the host; for providers that resume server-side (`kiro()`), no host file is required. Incompatible with maxIterations > 1. Ignored by other providers. */
   readonly resumeSession?: string;
   /**
    * An `AbortSignal` that cancels the run when aborted.

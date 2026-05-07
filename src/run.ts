@@ -242,7 +242,7 @@ export interface RunOptions {
   /** Branch strategy — controls how the agent's changes relate to branches.
    * Defaults to { type: "head" } for bind-mount providers and { type: "merge-to-head" } for isolated providers. */
   readonly branchStrategy?: BranchStrategy;
-  /** Resume a prior Claude Code session by ID. The session JSONL must exist on the host. Incompatible with maxIterations > 1. */
+  /** Resume a prior agent session by ID. For providers that capture sessions to host (`claudeCode()`), the session JSONL must exist on the host; for providers that resume server-side (`kiro()`), no host file is required. Incompatible with maxIterations > 1. Ignored by other providers. */
   readonly resumeSession?: string;
   /**
    * An `AbortSignal` that cancels the run when aborted.
