@@ -846,9 +846,25 @@ describe("kiro factory", () => {
     expect(command).toContain("--model 'model with spaces'");
   });
 
-  it("buildInteractiveArgs builds expected argv", () => {
+  it("buildInteractiveArgs includes --trust-all-tools when permissions skipped", () => {
     const provider = kiro("claude-sonnet-4-6");
     const args = provider.buildInteractiveArgs!(opts("hello"));
+    expect(args).toEqual([
+      "kiro-cli",
+      "chat",
+      "--trust-all-tools",
+      "--model",
+      "claude-sonnet-4-6",
+      "hello",
+    ]);
+  });
+
+  it("buildInteractiveArgs omits --trust-all-tools when permissions not skipped", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const args = provider.buildInteractiveArgs!({
+      prompt: "hello",
+      dangerouslySkipPermissions: false,
+    });
     expect(args).toEqual([
       "kiro-cli",
       "chat",
@@ -864,7 +880,13 @@ describe("kiro factory", () => {
       prompt: "",
       dangerouslySkipPermissions: true,
     });
-    expect(args).toEqual(["kiro-cli", "chat", "--model", "claude-sonnet-4-6"]);
+    expect(args).toEqual([
+      "kiro-cli",
+      "chat",
+      "--trust-all-tools",
+      "--model",
+      "claude-sonnet-4-6",
+    ]);
   });
 
   it("parseStreamLine returns empty array for all input (raw passthrough)", () => {

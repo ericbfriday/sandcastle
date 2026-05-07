@@ -15,7 +15,7 @@ import {
   type RunOptions,
   type RunResult,
 } from "./run.js";
-import { claudeCode } from "./AgentProvider.js";
+import { claudeCode, kiro } from "./AgentProvider.js";
 import { defaultImageName } from "./sandboxes/docker.js";
 import * as sandcastle from "./SandboxProvider.js";
 import { createBindMountSandboxProvider } from "./SandboxProvider.js";
@@ -433,6 +433,23 @@ describe("resumeSession validation", () => {
         resumeSession: "abc-123",
       }),
     ).rejects.toThrow('resumeSession "abc-123" not found');
+  });
+
+  it("does not require a host session file for non-capturing providers", async () => {
+    // kiro resumes via its own --resume-id, with no host-side JSONL to check.
+    // The host-file validation must not run for non-capturing providers, so
+    // this must NOT throw the "session file not found" error. (It may still
+    // throw later for unrelated reasons in this minimal test sandbox, but the
+    // resumeSession-specific validation should be skipped.)
+    await expect(
+      run({
+        agent: kiro("claude-sonnet-4-6"),
+        sandbox: testSandbox,
+        prompt: "test",
+        branchStrategy: { type: "head" },
+        resumeSession: "kiro-server-side-id",
+      }),
+    ).rejects.not.toThrow(/resumeSession .* not found/);
   });
 });
 

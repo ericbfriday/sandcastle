@@ -366,8 +366,13 @@ export const kiro = (model: string, options?: KiroOptions): AgentProvider => ({
     };
   },
 
-  buildInteractiveArgs({ prompt }: AgentCommandOptions): string[] {
-    const args = ["kiro-cli", "chat", "--model", model];
+  buildInteractiveArgs({
+    prompt,
+    dangerouslySkipPermissions,
+  }: AgentCommandOptions): string[] {
+    const args = ["kiro-cli", "chat"];
+    if (dangerouslySkipPermissions) args.push("--trust-all-tools");
+    args.push("--model", model);
     if (prompt) args.push(prompt);
     return args;
   },

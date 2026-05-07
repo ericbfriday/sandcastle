@@ -335,7 +335,11 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
   );
 
   // Validate: resumeSession file must exist on the host
-  if (options.resumeSession) {
+  // Only providers that capture sessions to host (e.g. claudeCode) keep a
+  // session file there to resume from. Non-capturing providers (e.g. kiro,
+  // which resumes via its own server-side --resume-id) have no host file to
+  // check, so we skip this validation for them.
+  if (options.resumeSession && provider.captureSessions) {
     const hStore = hostSessionStore(hostRepoDir);
     const sessionPath = hStore.sessionFilePath(options.resumeSession);
     if (!existsSync(sessionPath)) {

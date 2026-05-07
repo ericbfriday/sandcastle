@@ -435,22 +435,22 @@ await sandbox.close();
 
 #### `WorktreeRunOptions`
 
-| Option               | Type                   | Default | Description                                                                                                                         |
-| -------------------- | ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `agent`              | AgentProvider          | —       | **Required.** Agent provider                                                                                                        |
-| `sandbox`            | SandboxProvider        | —       | **Required.** Sandbox provider (AFK agents must be sandboxed)                                                                       |
-| `prompt`             | string                 | —       | Inline prompt (mutually exclusive with `promptFile`)                                                                                |
-| `promptFile`         | string                 | —       | Path to prompt file                                                                                                                 |
-| `maxIterations`      | number                 | 1       | Maximum iterations to run                                                                                                           |
-| `completionSignal`   | string \| string[]     | —       | Substring(s) to stop the iteration loop early                                                                                       |
-| `idleTimeoutSeconds` | number                 | 600     | Idle timeout in seconds                                                                                                             |
-| `name`               | string                 | —       | Optional run name                                                                                                                   |
-| `logging`            | LoggingOption          | file    | Logging mode                                                                                                                        |
-| `hooks`              | SandboxHooks           | —       | Lifecycle hooks (`host.*`, `sandbox.*`)                                                                                             |
-| `promptArgs`         | PromptArgs             | —       | Key-value map for `{{KEY}}` placeholder substitution                                                                                |
-| `env`                | Record<string, string> | —       | Environment variables to inject into the sandbox                                                                                    |
-| `resumeSession`      | string                 | —       | Resume a prior Claude Code session by ID. Incompatible with `maxIterations > 1`. Session file must exist on host.                   |
-| `signal`             | AbortSignal            | —       | Cancel the run when aborted. Kills the in-flight agent subprocess; the worktree is preserved on disk. Rejects with `signal.reason`. |
+| Option               | Type                   | Default | Description                                                                                                                                                                                                                                                                                      |
+| -------------------- | ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent`              | AgentProvider          | —       | **Required.** Agent provider                                                                                                                                                                                                                                                                     |
+| `sandbox`            | SandboxProvider        | —       | **Required.** Sandbox provider (AFK agents must be sandboxed)                                                                                                                                                                                                                                    |
+| `prompt`             | string                 | —       | Inline prompt (mutually exclusive with `promptFile`)                                                                                                                                                                                                                                             |
+| `promptFile`         | string                 | —       | Path to prompt file                                                                                                                                                                                                                                                                              |
+| `maxIterations`      | number                 | 1       | Maximum iterations to run                                                                                                                                                                                                                                                                        |
+| `completionSignal`   | string \| string[]     | —       | Substring(s) to stop the iteration loop early                                                                                                                                                                                                                                                    |
+| `idleTimeoutSeconds` | number                 | 600     | Idle timeout in seconds                                                                                                                                                                                                                                                                          |
+| `name`               | string                 | —       | Optional run name                                                                                                                                                                                                                                                                                |
+| `logging`            | LoggingOption          | file    | Logging mode                                                                                                                                                                                                                                                                                     |
+| `hooks`              | SandboxHooks           | —       | Lifecycle hooks (`host.*`, `sandbox.*`)                                                                                                                                                                                                                                                          |
+| `promptArgs`         | PromptArgs             | —       | Key-value map for `{{KEY}}` placeholder substitution                                                                                                                                                                                                                                             |
+| `env`                | Record<string, string> | —       | Environment variables to inject into the sandbox                                                                                                                                                                                                                                                 |
+| `resumeSession`      | string                 | —       | Resume a prior agent session by ID. Incompatible with `maxIterations > 1`. For providers that capture sessions (`claudeCode()`), the session file must exist on host; for providers that resume server-side (`kiro()`, via `--resume-id`), no host file is required. Ignored by other providers. |
+| `signal`             | AbortSignal            | —       | Cancel the run when aborted. Kills the in-flight agent subprocess; the worktree is preserved on disk. Rejects with `signal.reason`.                                                                                                                                                              |
 
 #### `WorktreeRunResult`
 
@@ -665,25 +665,25 @@ Removes the Podman image.
 
 ### `RunOptions`
 
-| Option               | Type               | Default                       | Description                                                                                                                                                                             |
-| -------------------- | ------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agent`              | AgentProvider      | —                             | **Required.** Agent provider (e.g. `claudeCode("claude-opus-4-6")`, `pi("claude-sonnet-4-6")`, `codex("gpt-5.4-mini")`, `opencode("opencode/big-pickle")`, `kiro("claude-sonnet-4-6")`) |
-| `sandbox`            | SandboxProvider    | —                             | **Required.** Sandbox provider (e.g. `docker()`, `podman()`, `docker({ imageName: "sandcastle:local" })`)                                                                               |
-| `cwd`                | string             | `process.cwd()`               | Host repo directory — anchor for `.sandcastle/` artifacts and git operations. Relative paths resolve against `process.cwd()`.                                                           |
-| `prompt`             | string             | —                             | Inline prompt (mutually exclusive with `promptFile`)                                                                                                                                    |
-| `promptFile`         | string             | —                             | Path to prompt file (mutually exclusive with `prompt`). Resolves against `process.cwd()`, **not** `cwd`.                                                                                |
-| `maxIterations`      | number             | `1`                           | Maximum iterations to run                                                                                                                                                               |
-| `hooks`              | SandboxHooks       | —                             | Lifecycle hooks (`host.*`, `sandbox.*`)                                                                                                                                                 |
-| `name`               | string             | —                             | Display name for the run, shown as a prefix in log output                                                                                                                               |
-| `promptArgs`         | PromptArgs         | —                             | Key-value map for `{{KEY}}` placeholder substitution                                                                                                                                    |
-| `branchStrategy`     | BranchStrategy     | per-provider default          | Branch strategy: `{ type: 'head' }`, `{ type: 'merge-to-head' }`, or `{ type: 'branch', branch: '…' }`                                                                                  |
-| `copyToWorktree`     | string[]           | —                             | Host-relative file paths to copy into the sandbox before start (not supported with `branchStrategy: { type: 'head' }`)                                                                  |
-| `logging`            | object             | file (auto-generated)         | `{ type: 'file', path }` or `{ type: 'stdout' }`                                                                                                                                        |
-| `completionSignal`   | string \| string[] | `<promise>COMPLETE</promise>` | String or array of strings the agent emits to stop the iteration loop early                                                                                                             |
-| `idleTimeoutSeconds` | number             | `600`                         | Idle timeout in seconds — resets on each agent output event                                                                                                                             |
-| `resumeSession`      | string             | —                             | Resume a prior Claude Code session by ID. Incompatible with `maxIterations > 1`. Session file must exist on host.                                                                       |
-| `signal`             | AbortSignal        | —                             | Cancel the run when aborted. Kills the in-flight agent subprocess and cancels lifecycle hooks; the worktree is preserved on disk. Rejects with `signal.reason`.                         |
-| `timeouts`           | Timeouts           | —                             | Override default timeouts for built-in lifecycle steps. Currently supports `{ copyToWorktreeMs?: number }` (default: 60 000).                                                           |
+| Option               | Type               | Default                       | Description                                                                                                                                                                                                                                                                                      |
+| -------------------- | ------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent`              | AgentProvider      | —                             | **Required.** Agent provider (e.g. `claudeCode("claude-opus-4-6")`, `pi("claude-sonnet-4-6")`, `codex("gpt-5.4-mini")`, `opencode("opencode/big-pickle")`, `kiro("claude-sonnet-4-6")`)                                                                                                          |
+| `sandbox`            | SandboxProvider    | —                             | **Required.** Sandbox provider (e.g. `docker()`, `podman()`, `docker({ imageName: "sandcastle:local" })`)                                                                                                                                                                                        |
+| `cwd`                | string             | `process.cwd()`               | Host repo directory — anchor for `.sandcastle/` artifacts and git operations. Relative paths resolve against `process.cwd()`.                                                                                                                                                                    |
+| `prompt`             | string             | —                             | Inline prompt (mutually exclusive with `promptFile`)                                                                                                                                                                                                                                             |
+| `promptFile`         | string             | —                             | Path to prompt file (mutually exclusive with `prompt`). Resolves against `process.cwd()`, **not** `cwd`.                                                                                                                                                                                         |
+| `maxIterations`      | number             | `1`                           | Maximum iterations to run                                                                                                                                                                                                                                                                        |
+| `hooks`              | SandboxHooks       | —                             | Lifecycle hooks (`host.*`, `sandbox.*`)                                                                                                                                                                                                                                                          |
+| `name`               | string             | —                             | Display name for the run, shown as a prefix in log output                                                                                                                                                                                                                                        |
+| `promptArgs`         | PromptArgs         | —                             | Key-value map for `{{KEY}}` placeholder substitution                                                                                                                                                                                                                                             |
+| `branchStrategy`     | BranchStrategy     | per-provider default          | Branch strategy: `{ type: 'head' }`, `{ type: 'merge-to-head' }`, or `{ type: 'branch', branch: '…' }`                                                                                                                                                                                           |
+| `copyToWorktree`     | string[]           | —                             | Host-relative file paths to copy into the sandbox before start (not supported with `branchStrategy: { type: 'head' }`)                                                                                                                                                                           |
+| `logging`            | object             | file (auto-generated)         | `{ type: 'file', path }` or `{ type: 'stdout' }`                                                                                                                                                                                                                                                 |
+| `completionSignal`   | string \| string[] | `<promise>COMPLETE</promise>` | String or array of strings the agent emits to stop the iteration loop early                                                                                                                                                                                                                      |
+| `idleTimeoutSeconds` | number             | `600`                         | Idle timeout in seconds — resets on each agent output event                                                                                                                                                                                                                                      |
+| `resumeSession`      | string             | —                             | Resume a prior agent session by ID. Incompatible with `maxIterations > 1`. For providers that capture sessions (`claudeCode()`), the session file must exist on host; for providers that resume server-side (`kiro()`, via `--resume-id`), no host file is required. Ignored by other providers. |
+| `signal`             | AbortSignal        | —                             | Cancel the run when aborted. Kills the in-flight agent subprocess and cancels lifecycle hooks; the worktree is preserved on disk. Rejects with `signal.reason`.                                                                                                                                  |
+| `timeouts`           | Timeouts           | —                             | Override default timeouts for built-in lifecycle steps. Currently supports `{ copyToWorktreeMs?: number }` (default: 60 000).                                                                                                                                                                    |
 
 ### `RunResult`
 
@@ -721,7 +721,9 @@ Session capture is enabled by default for `claudeCode()` and can be opted out vi
 
 ### Session resume
 
-Pass `resumeSession` to `run()` to continue a prior Claude Code conversation inside a new sandbox:
+Pass `resumeSession` to `run()` to continue a prior agent conversation inside a new sandbox. Behavior depends on whether the agent provider captures sessions to host:
+
+**Claude Code** (host-captured sessions):
 
 ```typescript
 const result = await run({
@@ -732,14 +734,27 @@ const result = await run({
 });
 ```
 
-Before the sandbox starts, Sandcastle validates that the session file exists on the host and transfers it into the sandbox with `cwd` fields rewritten to match the sandbox-side path. The Claude Code agent receives `--resume <id>` on its print command for iteration 1.
+Before the sandbox starts, Sandcastle validates that the session file exists at `~/.claude/projects/<encoded-path>/sessions/<id>.jsonl` and transfers it into the sandbox with `cwd` fields rewritten to match the sandbox-side path. The Claude Code agent receives `--resume <id>` on its print command for iteration 1.
+
+**Kiro** (server-side sessions):
+
+```typescript
+const result = await run({
+  agent: kiro("claude-sonnet-4-6"),
+  sandbox: docker(),
+  prompt: "Continue where you left off",
+  resumeSession: "kiro-server-side-id",
+});
+```
+
+Kiro stores sessions remotely, so no host-side file is required and no transfer happens. The Kiro agent receives `--resume-id <id>` on its print command for iteration 1.
 
 Constraints:
 
 - `resumeSession` is incompatible with `maxIterations > 1` (throws before sandbox creation).
-- The session file must exist at `~/.claude/projects/<encoded-path>/sessions/<id>.jsonl` (throws before sandbox creation).
+- For providers that capture sessions (`claudeCode()`), the session file must exist on host (throws before sandbox creation).
 - Only iteration 1 receives the resume flag; subsequent iterations (if any) start fresh.
-- Non-Claude agent providers ignore `resumeSession`.
+- Other agent providers (`pi`, `codex`, `opencode`) ignore `resumeSession`.
 
 ### `ClaudeCodeOptions`
 

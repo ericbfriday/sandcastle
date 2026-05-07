@@ -231,7 +231,12 @@ export const createWorktree = async (
       baseBranch,
     });
     if (options.copyToWorktree && options.copyToWorktree.length > 0) {
-      yield* copyToWorktree(options.copyToWorktree, hostRepoDir, info.path, options.timeouts?.copyToWorktreeMs);
+      yield* copyToWorktree(
+        options.copyToWorktree,
+        hostRepoDir,
+        info.path,
+        options.timeouts?.copyToWorktreeMs,
+      );
     }
     // Run host.onWorktreeReady hooks after copyToWorktree, before sandbox creation
     if (options.hooks?.host?.onWorktreeReady?.length) {
@@ -481,7 +486,10 @@ export const createWorktree = async (
       );
     }
 
-    if (opts.resumeSession) {
+    // Only providers that capture sessions to host (e.g. claudeCode) keep a
+    // session file there to resume from. Non-capturing providers (e.g. kiro)
+    // have no host file to check, so we skip this validation for them.
+    if (opts.resumeSession && provider.captureSessions) {
       const hStore = hostSessionStore(hostRepoDir);
       const sessionPath = hStore.sessionFilePath(opts.resumeSession);
       if (!existsSync(sessionPath)) {
