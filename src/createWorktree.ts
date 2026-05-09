@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Effect, Layer } from "effect";
 import { hostSessionStore } from "./SessionStore.js";
-import type { AgentProvider } from "./AgentProvider.js";
+import { type AgentProvider, usesHostCapturedResume } from "./AgentProvider.js";
 import { ClackDisplay, Display, FileDisplay } from "./Display.js";
 import { preprocessPrompt } from "./PromptPreprocessor.js";
 import { resolvePrompt } from "./PromptResolver.js";
@@ -138,7 +138,7 @@ export interface WorktreeRunOptions {
   readonly hooks?: SandboxHooks;
   /** Environment variables to inject into the sandbox. */
   readonly env?: Record<string, string>;
-  /** Resume a prior agent session by ID. For providers that capture sessions to host (`claudeCode()`), the session JSONL must exist on the host; for providers that resume server-side (`kiro()`), no host file is required. Incompatible with maxIterations > 1. Ignored by other providers. */
+  /** Resume a prior agent session by ID. Host-captured providers (`claudeCode()`) require a host session JSONL; provider-native resume (`kiro()`) does not. Incompatible with maxIterations > 1. Ignored by unsupported providers. */
   readonly resumeSession?: string;
   /**
    * An `AbortSignal` that cancels the run when aborted.
@@ -486,10 +486,11 @@ export const createWorktree = async (
       );
     }
 
-    // Only providers that capture sessions to host (e.g. claudeCode) keep a
-    // session file there to resume from. Non-capturing providers (e.g. kiro)
-    // have no host file to check, so we skip this validation for them.
-    if (opts.resumeSession && provider.captureSessions) {
+    // Only host-captured resume needs a host-side session file. Providers
+    // that resume natively server-side (for example kiro) skip this check.
+    const requiresHostCapturedResumeSessionFile =
+      opts.resumeSession !== undefined && usesHostCapturedResume(provider);
+    if (requiresHostCapturedResumeSessionFile) {
       const hStore = hostSessionStore(hostRepoDir);
       const sessionPath = hStore.sessionFilePath(opts.resumeSession);
       if (!existsSync(sessionPath)) {

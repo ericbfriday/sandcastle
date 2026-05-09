@@ -1,4 +1,5 @@
 import { readFileSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
@@ -30,6 +31,18 @@ const testSandbox = createBindMountSandboxProvider({
     close: async () => {},
   }),
 });
+
+const initGitRepo = (dir: string): void => {
+  execSync("git init -b main", { cwd: dir, stdio: "ignore" });
+  execSync('git config user.email "test@test.com"', {
+    cwd: dir,
+    stdio: "ignore",
+  });
+  execSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
+  writeFileSync(join(dir, "README.md"), "test repo\n");
+  execSync("git add README.md", { cwd: dir, stdio: "ignore" });
+  execSync('git commit -m "initial commit"', { cwd: dir, stdio: "ignore" });
+};
 
 describe("printFileDisplayStartup", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -435,21 +448,35 @@ describe("resumeSession validation", () => {
     ).rejects.toThrow('resumeSession "abc-123" not found');
   });
 
-  it("does not require a host session file for non-capturing providers", async () => {
-    // kiro resumes via its own --resume-id, with no host-side JSONL to check.
-    // The host-file validation must not run for non-capturing providers, so
-    // this must NOT throw the "session file not found" error. (It may still
-    // throw later for unrelated reasons in this minimal test sandbox, but the
-    // resumeSession-specific validation should be skipped.)
+  it("does not require a host session file for provider-native resume", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "run-kiro-resume-"));
+    initGitRepo(cwd);
+
     await expect(
       run({
         agent: kiro("claude-sonnet-4-6"),
         sandbox: testSandbox,
+        cwd,
         prompt: "test",
         branchStrategy: { type: "head" },
         resumeSession: "kiro-server-side-id",
       }),
-    ).rejects.not.toThrow(/resumeSession .* not found/);
+    ).resolves.toMatchObject({
+      branch: "main",
+      iterations: [{ sessionId: undefined, sessionFilePath: undefined }],
+    });
+  });
+
+  it("still requires a host session file for host-captured resume when capture is disabled", async () => {
+    await expect(
+      run({
+        agent: claudeCode("claude-opus-4-6", { captureSessions: false }),
+        sandbox: testSandbox,
+        prompt: "test",
+        branchStrategy: { type: "head" },
+        resumeSession: "abc-123",
+      }),
+    ).rejects.toThrow('resumeSession "abc-123" not found');
   });
 });
 

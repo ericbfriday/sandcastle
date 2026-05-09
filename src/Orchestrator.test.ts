@@ -21,6 +21,7 @@ import { substitutePromptArgs } from "./PromptArgumentSubstitution.js";
 import {
   claudeCode,
   codex as codexFactory,
+  kiro,
   opencode as opencodeFactory,
   pi as piFactory,
   DEFAULT_MODEL,
@@ -1594,36 +1595,34 @@ describe("Orchestrator error handling", () => {
     await commitFile(hostDir, "hello.txt", "hello", "initial commit");
 
     const opencodeProvider = opencodeFactory("test-model");
-    const stdoutContent = "Setting up environment...\nLoading model...\nError: API key is invalid\nPlease check your credentials";
+    const stdoutContent =
+      "Setting up environment...\nLoading model...\nError: API key is invalid\nPlease check your credentials";
 
-    const { factoryLayer } = makeTestSandboxFactory(
-      hostDir,
-      (dir) => {
-        const fsLayer = makeLocalSandboxLayer(dir);
-        return Layer.succeed(Sandbox, {
-          exec: (command, options) => {
-            if (command.startsWith("opencode ")) {
-              return Effect.succeed({
-                stdout: stdoutContent,
-                stderr: "",
-                exitCode: 1,
-              });
-            }
-            return Effect.flatMap(Sandbox, (real) =>
-              real.exec(command, options),
-            ).pipe(Effect.provide(fsLayer));
-          },
-          copyIn: (hostPath, sandboxPath) =>
-            Effect.flatMap(Sandbox, (real) =>
-              real.copyIn(hostPath, sandboxPath),
-            ).pipe(Effect.provide(fsLayer)),
-          copyFileOut: (sandboxPath, hostPath) =>
-            Effect.flatMap(Sandbox, (real) =>
-              real.copyFileOut(sandboxPath, hostPath),
-            ).pipe(Effect.provide(fsLayer)),
-        });
-      },
-    );
+    const { factoryLayer } = makeTestSandboxFactory(hostDir, (dir) => {
+      const fsLayer = makeLocalSandboxLayer(dir);
+      return Layer.succeed(Sandbox, {
+        exec: (command, options) => {
+          if (command.startsWith("opencode ")) {
+            return Effect.succeed({
+              stdout: stdoutContent,
+              stderr: "",
+              exitCode: 1,
+            });
+          }
+          return Effect.flatMap(Sandbox, (real) =>
+            real.exec(command, options),
+          ).pipe(Effect.provide(fsLayer));
+        },
+        copyIn: (hostPath, sandboxPath) =>
+          Effect.flatMap(Sandbox, (real) =>
+            real.copyIn(hostPath, sandboxPath),
+          ).pipe(Effect.provide(fsLayer)),
+        copyFileOut: (sandboxPath, hostPath) =>
+          Effect.flatMap(Sandbox, (real) =>
+            real.copyFileOut(sandboxPath, hostPath),
+          ).pipe(Effect.provide(fsLayer)),
+      });
+    });
 
     const exit = await Effect.runPromiseExit(
       orchestrate({
@@ -1657,35 +1656,32 @@ describe("Orchestrator error handling", () => {
       result: "Rate limit exceeded, please retry later",
     });
 
-    const { factoryLayer } = makeTestSandboxFactory(
-      hostDir,
-      (dir) => {
-        const fsLayer = makeLocalSandboxLayer(dir);
-        return Layer.succeed(Sandbox, {
-          exec: (command, options) => {
-            if (command.startsWith("claude ") && options?.onLine) {
-              options.onLine(errorLine);
-              return Effect.succeed({
-                stdout: errorLine,
-                stderr: "",
-                exitCode: 1,
-              });
-            }
-            return Effect.flatMap(Sandbox, (real) =>
-              real.exec(command, options),
-            ).pipe(Effect.provide(fsLayer));
-          },
-          copyIn: (hostPath, sandboxPath) =>
-            Effect.flatMap(Sandbox, (real) =>
-              real.copyIn(hostPath, sandboxPath),
-            ).pipe(Effect.provide(fsLayer)),
-          copyFileOut: (sandboxPath, hostPath) =>
-            Effect.flatMap(Sandbox, (real) =>
-              real.copyFileOut(sandboxPath, hostPath),
-            ).pipe(Effect.provide(fsLayer)),
-        });
-      },
-    );
+    const { factoryLayer } = makeTestSandboxFactory(hostDir, (dir) => {
+      const fsLayer = makeLocalSandboxLayer(dir);
+      return Layer.succeed(Sandbox, {
+        exec: (command, options) => {
+          if (command.startsWith("claude ") && options?.onLine) {
+            options.onLine(errorLine);
+            return Effect.succeed({
+              stdout: errorLine,
+              stderr: "",
+              exitCode: 1,
+            });
+          }
+          return Effect.flatMap(Sandbox, (real) =>
+            real.exec(command, options),
+          ).pipe(Effect.provide(fsLayer));
+        },
+        copyIn: (hostPath, sandboxPath) =>
+          Effect.flatMap(Sandbox, (real) =>
+            real.copyIn(hostPath, sandboxPath),
+          ).pipe(Effect.provide(fsLayer)),
+        copyFileOut: (sandboxPath, hostPath) =>
+          Effect.flatMap(Sandbox, (real) =>
+            real.copyFileOut(sandboxPath, hostPath),
+          ).pipe(Effect.provide(fsLayer)),
+      });
+    });
 
     const exit = await Effect.runPromiseExit(
       orchestrate({
@@ -1702,7 +1698,9 @@ describe("Orchestrator error handling", () => {
       expect(err).toBeInstanceOf(AgentError);
       if (err instanceof AgentError) {
         expect(err.message).toContain("claude-code exited with code 1:");
-        expect(err.message).toContain("Rate limit exceeded, please retry later");
+        expect(err.message).toContain(
+          "Rate limit exceeded, please retry later",
+        );
       }
     }
   });
@@ -1715,34 +1713,31 @@ describe("Orchestrator error handling", () => {
 
     const opencodeProvider = opencodeFactory("test-model");
 
-    const { factoryLayer } = makeTestSandboxFactory(
-      hostDir,
-      (dir) => {
-        const fsLayer = makeLocalSandboxLayer(dir);
-        return Layer.succeed(Sandbox, {
-          exec: (command, options) => {
-            if (command.startsWith("opencode ")) {
-              return Effect.succeed({
-                stdout: "some stdout output",
-                stderr: "fatal error from stderr",
-                exitCode: 1,
-              });
-            }
-            return Effect.flatMap(Sandbox, (real) =>
-              real.exec(command, options),
-            ).pipe(Effect.provide(fsLayer));
-          },
-          copyIn: (hostPath, sandboxPath) =>
-            Effect.flatMap(Sandbox, (real) =>
-              real.copyIn(hostPath, sandboxPath),
-            ).pipe(Effect.provide(fsLayer)),
-          copyFileOut: (sandboxPath, hostPath) =>
-            Effect.flatMap(Sandbox, (real) =>
-              real.copyFileOut(sandboxPath, hostPath),
-            ).pipe(Effect.provide(fsLayer)),
-        });
-      },
-    );
+    const { factoryLayer } = makeTestSandboxFactory(hostDir, (dir) => {
+      const fsLayer = makeLocalSandboxLayer(dir);
+      return Layer.succeed(Sandbox, {
+        exec: (command, options) => {
+          if (command.startsWith("opencode ")) {
+            return Effect.succeed({
+              stdout: "some stdout output",
+              stderr: "fatal error from stderr",
+              exitCode: 1,
+            });
+          }
+          return Effect.flatMap(Sandbox, (real) =>
+            real.exec(command, options),
+          ).pipe(Effect.provide(fsLayer));
+        },
+        copyIn: (hostPath, sandboxPath) =>
+          Effect.flatMap(Sandbox, (real) =>
+            real.copyIn(hostPath, sandboxPath),
+          ).pipe(Effect.provide(fsLayer)),
+        copyFileOut: (sandboxPath, hostPath) =>
+          Effect.flatMap(Sandbox, (real) =>
+            real.copyFileOut(sandboxPath, hostPath),
+          ).pipe(Effect.provide(fsLayer)),
+      });
+    });
 
     const exit = await Effect.runPromiseExit(
       orchestrate({
@@ -3557,6 +3552,152 @@ describe("Session capture integration", () => {
     const capturedLines = capturedContent.split("\n");
     const entry = JSON.parse(capturedLines[0]!) as { cwd: string };
     expect(entry.cwd).toBe(hostDir);
+  });
+
+  it("passes provider-native resume to the agent without host session transfer", async () => {
+    const hostDir = await mkdtemp(join(tmpdir(), "orch-native-resume-host-"));
+    const hostProjectsDir = await mkdtemp(
+      join(tmpdir(), "orch-native-resume-projects-"),
+    );
+    const sandboxProjectsDir = await mkdtemp(
+      join(tmpdir(), "orch-native-resume-sb-projects-"),
+    );
+    const resumeSession = "provider-native-resume-123";
+
+    await initRepo(hostDir);
+    await commitFile(hostDir, "hello.txt", "hello", "initial commit");
+
+    const sandboxBaseDir = join(tmpdir(), `orch-native-resume-${randomUUID()}`);
+    let branchCounter = 0;
+    let copyFileInCalls = 0;
+    let seenCommand: string | undefined;
+
+    const factoryLayer = Layer.succeed(SandboxFactory, {
+      withSandbox: <A, E, R>(
+        makeEffect: (
+          info: import("./SandboxFactory.js").SandboxInfo,
+        ) => Effect.Effect<A, E, R | Sandbox>,
+      ): Effect.Effect<
+        import("./SandboxFactory.js").WithSandboxResult<A>,
+        E | DockerError,
+        Exclude<R, Sandbox>
+      > =>
+        Effect.acquireUseRelease(
+          Effect.promise(async () => {
+            await rm(sandboxBaseDir, { recursive: true, force: true });
+            const branchName = `sandcastle/test-${++branchCounter}`;
+            await execAsync(
+              `git worktree add -b "${branchName}" "${sandboxBaseDir}" HEAD`,
+              { cwd: hostDir },
+            );
+            return branchName;
+          }),
+          (_branchName) => {
+            const handle: BindMountSandboxHandle = {
+              worktreePath: sandboxBaseDir,
+              exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
+              copyFileIn: async (hostPath, sandboxPath) => {
+                copyFileInCalls++;
+                await mkdir(join(sandboxPath, ".."), { recursive: true });
+                await copyFile(hostPath, sandboxPath);
+              },
+              copyFileOut: async (sandboxPath, hostPath) => {
+                await mkdir(join(hostPath, ".."), { recursive: true });
+                await copyFile(sandboxPath, hostPath);
+              },
+              close: async () => {},
+            };
+
+            const fsLayer = makeLocalSandboxLayer(sandboxBaseDir);
+            const sandboxLayer = Layer.succeed(Sandbox, {
+              exec: (command, options) => {
+                if (command.startsWith("kiro-cli chat") && options?.onLine) {
+                  seenCommand = command;
+                  return Effect.gen(function* () {
+                    const cwd = options.cwd ?? sandboxBaseDir;
+                    const sbEncoded = encodeProjectPath(cwd);
+                    const sbSessionPath = join(
+                      sandboxProjectsDir,
+                      sbEncoded,
+                      `${resumeSession}.jsonl`,
+                    );
+                    expect(existsSync(sbSessionPath)).toBe(false);
+                    return {
+                      stdout: "Done. <promise>COMPLETE</promise>",
+                      stderr: "",
+                      exitCode: 0,
+                    };
+                  });
+                }
+                return Effect.flatMap(Sandbox, (real) =>
+                  real.exec(command, options),
+                ).pipe(Effect.provide(fsLayer));
+              },
+              copyIn: (hostPath, sandboxPath) =>
+                Effect.flatMap(Sandbox, (real) =>
+                  real.copyIn(hostPath, sandboxPath),
+                ).pipe(Effect.provide(fsLayer)),
+              copyFileOut: (sandboxPath, hostPath) =>
+                Effect.flatMap(Sandbox, (real) =>
+                  real.copyFileOut(sandboxPath, hostPath),
+                ).pipe(Effect.provide(fsLayer)),
+            });
+
+            return makeEffect({
+              hostWorktreePath: sandboxBaseDir,
+              sandboxRepoPath: sandboxBaseDir,
+              applyToHost: () => Effect.void,
+              bindMountHandle: handle,
+            }).pipe(Effect.provide(sandboxLayer)) as Effect.Effect<
+              A,
+              E | DockerError,
+              Exclude<R, Sandbox>
+            >;
+          },
+          (_branchName) =>
+            Effect.promise(async () => {
+              try {
+                await execAsync(
+                  `git worktree remove "${sandboxBaseDir}" --force`,
+                  { cwd: hostDir },
+                ).catch(() => {});
+              } catch {}
+            }),
+        ).pipe(
+          Effect.map((value) => ({
+            value,
+            preservedWorktreePath: undefined,
+          })),
+        ),
+    });
+
+    const result = await Effect.runPromise(
+      orchestrate({
+        provider: kiro("kiro-model"),
+        hostRepoDir: hostDir,
+        iterations: 1,
+        prompt: "continue working",
+        resumeSession,
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            factoryLayer,
+            testDisplayLayer,
+            sessionPathsLayer({ hostProjectsDir, sandboxProjectsDir }),
+          ),
+        ),
+      ),
+    );
+
+    expect(seenCommand).toContain(`--resume-id '${resumeSession}'`);
+    expect(copyFileInCalls).toBe(0);
+    expect(result.iterations).toEqual([
+      {
+        sessionId: undefined,
+        sessionFilePath: undefined,
+        usage: undefined,
+      },
+    ]);
   });
 
   it("populates usage on IterationResult when session has assistant usage", async () => {

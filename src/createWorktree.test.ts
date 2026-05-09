@@ -12,7 +12,8 @@ import type {
   WorktreeInteractiveOptions,
   WorktreeCreateSandboxOptions,
 } from "./createWorktree.js";
-import { claudeCode } from "./AgentProvider.js";
+import { claudeCode, kiro } from "./AgentProvider.js";
+import { run } from "./run.js";
 import {
   createBindMountSandboxProvider,
   type BindMountSandboxHandle,
@@ -584,7 +585,10 @@ describe("worktree.run()", () => {
           ): Promise<ExecResult> => {
             const cwd = execOptions?.cwd ?? options.worktreePath;
             // Intercept agent commands
-            if (command.startsWith("claude ")) {
+            if (
+              command.startsWith("claude ") ||
+              command.startsWith("kiro-cli ")
+            ) {
               const output = await mockAgentBehavior(cwd);
               const streamOutput = toStreamJson(output);
               if (execOptions?.onLine) {
@@ -720,6 +724,139 @@ describe("worktree.run()", () => {
       prompt: "test",
       // @ts-expect-error — sandbox is required
     } satisfies WorktreeRunOptions;
+  });
+
+  it("matches run() host-captured resume validation", async () => {
+    const hostDir = await mkdtemp(join(tmpdir(), "ws-run-resume-"));
+    await initRepo(hostDir);
+    await commitFile(hostDir, "init.txt", "init", "initial commit");
+
+    const sandbox = makeRunTestProvider();
+    const missingSessionId = "missing-claude-session";
+
+    const ws = await createWorktree({
+      branchStrategy: { type: "branch", branch: "resume-host-captured" },
+      cwd: hostDir,
+    });
+
+    try {
+      await expect(
+        run({
+          agent: claudeCode("claude-opus-4-6"),
+          sandbox,
+          prompt: "test",
+          branchStrategy: { type: "head" },
+          cwd: hostDir,
+          resumeSession: missingSessionId,
+        }),
+      ).rejects.toThrow(`resumeSession "${missingSessionId}" not found`);
+
+      await expect(
+        ws.run({
+          agent: claudeCode("claude-opus-4-6"),
+          sandbox,
+          prompt: "test",
+          resumeSession: missingSessionId,
+        }),
+      ).rejects.toThrow(`resumeSession "${missingSessionId}" not found`);
+    } finally {
+      await ws.close();
+      await rm(hostDir, { recursive: true, force: true });
+    }
+  });
+
+  it("matches run() provider-native resume validation", async () => {
+    const hostDir = await mkdtemp(join(tmpdir(), "ws-run-resume-"));
+    await initRepo(hostDir);
+    await commitFile(hostDir, "init.txt", "init", "initial commit");
+
+    const sandbox = makeRunTestProvider();
+    const resumeSession = "kiro-server-side-id";
+    const assertSkipsHostResumeValidation = async (
+      promise: Promise<unknown>,
+    ) => {
+      try {
+        await promise;
+      } catch (error) {
+        expect(String(error)).not.toMatch(
+          /resumeSession "kiro-server-side-id" not found/,
+        );
+      }
+    };
+
+    const ws = await createWorktree({
+      branchStrategy: { type: "branch", branch: "resume-provider-native" },
+      cwd: hostDir,
+    });
+
+    try {
+      await assertSkipsHostResumeValidation(
+        run({
+          agent: kiro("claude-sonnet-4-6"),
+          sandbox,
+          prompt: "test",
+          branchStrategy: { type: "head" },
+          cwd: hostDir,
+          resumeSession,
+        }),
+      );
+
+      await assertSkipsHostResumeValidation(
+        ws.run({
+          agent: kiro("claude-sonnet-4-6"),
+          sandbox,
+          prompt: "test",
+          resumeSession,
+        }),
+      );
+    } finally {
+      await ws.close();
+      await rm(hostDir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves iteration-1-only resume rejection", async () => {
+    const hostDir = await mkdtemp(join(tmpdir(), "ws-run-resume-"));
+    await initRepo(hostDir);
+    await commitFile(hostDir, "init.txt", "init", "initial commit");
+
+    const sandbox = makeRunTestProvider();
+
+    const ws = await createWorktree({
+      branchStrategy: { type: "branch", branch: "resume-iteration-guard" },
+      cwd: hostDir,
+    });
+
+    try {
+      await expect(
+        run({
+          agent: kiro("claude-sonnet-4-6"),
+          sandbox,
+          prompt: "test",
+          branchStrategy: { type: "head" },
+          cwd: hostDir,
+          resumeSession: "kiro-server-side-id",
+          maxIterations: 2,
+        }),
+      ).rejects.toThrow(
+        "resumeSession cannot be combined with maxIterations > 1",
+      );
+
+      await expect(
+        ws.run({
+          agent: kiro("claude-sonnet-4-6"),
+          sandbox,
+          prompt: "test",
+          resumeSession: "kiro-server-side-id",
+          maxIterations: 2,
+        }),
+      ).rejects.toThrow(
+        "resumeSession cannot be combined with maxIterations > 1",
+      );
+    } finally {
+      await ws.close();
+      await rm(hostDir, { recursive: true, force: true });
+    }
   });
 
   it("pre-aborted signal rejects immediately without running agent", async () => {

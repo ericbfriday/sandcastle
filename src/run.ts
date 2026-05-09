@@ -4,7 +4,7 @@ import path, { join } from "node:path";
 import { styleText } from "node:util";
 import { Effect, Layer } from "effect";
 import { resolveCwd } from "./resolveCwd.js";
-import type { AgentProvider } from "./AgentProvider.js";
+import { type AgentProvider, usesHostCapturedResume } from "./AgentProvider.js";
 import {
   ClackDisplay,
   Display,
@@ -242,7 +242,7 @@ export interface RunOptions {
   /** Branch strategy — controls how the agent's changes relate to branches.
    * Defaults to { type: "head" } for bind-mount providers and { type: "merge-to-head" } for isolated providers. */
   readonly branchStrategy?: BranchStrategy;
-  /** Resume a prior agent session by ID. For providers that capture sessions to host (`claudeCode()`), the session JSONL must exist on the host; for providers that resume server-side (`kiro()`), no host file is required. Incompatible with maxIterations > 1. Ignored by other providers. */
+  /** Resume a prior agent session by ID. Host-captured providers (`claudeCode()`) require a host session JSONL; provider-native resume (`kiro()`) does not. Incompatible with maxIterations > 1. Ignored by unsupported providers. */
   readonly resumeSession?: string;
   /**
    * An `AbortSignal` that cancels the run when aborted.
@@ -334,12 +334,8 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
     resolveCwd(options.cwd).pipe(Effect.provide(NodeContext.layer)),
   );
 
-  // Validate: resumeSession file must exist on the host
-  // Only providers that capture sessions to host (e.g. claudeCode) keep a
-  // session file there to resume from. Non-capturing providers (e.g. kiro,
-  // which resumes via its own server-side --resume-id) have no host file to
-  // check, so we skip this validation for them.
-  if (options.resumeSession && provider.captureSessions) {
+  // Validate: host-captured resume requires a host session file.
+  if (options.resumeSession && usesHostCapturedResume(provider)) {
     const hStore = hostSessionStore(hostRepoDir);
     const sessionPath = hStore.sessionFilePath(options.resumeSession);
     if (!existsSync(sessionPath)) {

@@ -925,7 +925,54 @@ describe("kiro factory", () => {
   });
 });
 
-describe("resumeSession on non-Claude providers", () => {
+describe("resumeSession provider contract", () => {
+  it("claudeCode keeps host-captured resume semantics and metadata hooks", () => {
+    const provider = claudeCode("claude-opus-4-6");
+    const { command } = provider.buildPrintCommand({
+      prompt: "test",
+      dangerouslySkipPermissions: true,
+      resumeSession: "abc-123",
+    });
+
+    expect(provider.captureSessions).toBe(true);
+    expect(provider.resumeSessionSupport).toBe("host-captured");
+    expect(provider.parseSessionUsage).toBeDefined();
+    expect(command).toContain("--resume 'abc-123'");
+    expect(
+      provider.parseStreamLine(
+        JSON.stringify({
+          type: "system",
+          subtype: "init",
+          session_id: "abc-123",
+        }),
+      ),
+    ).toEqual([{ type: "session_id", sessionId: "abc-123" }]);
+  });
+
+  it("kiro uses provider-native resume without Claude-style capture metadata", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const { command } = provider.buildPrintCommand({
+      prompt: "test",
+      dangerouslySkipPermissions: true,
+      resumeSession: "abc-123",
+    });
+
+    expect(provider.captureSessions).toBe(false);
+    expect(provider.resumeSessionSupport).toBe("provider-native");
+    expect(provider.parseSessionUsage).toBeUndefined();
+    expect(command).toContain("--resume-id 'abc-123'");
+    expect(command).not.toContain("--resume 'abc-123'");
+    expect(
+      provider.parseStreamLine(
+        JSON.stringify({
+          type: "system",
+          subtype: "init",
+          session_id: "abc-123",
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it("pi ignores resumeSession in buildPrintCommand", () => {
     const provider = pi("claude-sonnet-4-6");
     const { command } = provider.buildPrintCommand({
@@ -933,6 +980,7 @@ describe("resumeSession on non-Claude providers", () => {
       dangerouslySkipPermissions: true,
       resumeSession: "abc-123",
     });
+    expect(provider.resumeSessionSupport).toBe("unsupported");
     expect(command).not.toContain("--resume");
     expect(command).not.toContain("abc-123");
   });
@@ -944,6 +992,7 @@ describe("resumeSession on non-Claude providers", () => {
       dangerouslySkipPermissions: true,
       resumeSession: "abc-123",
     });
+    expect(provider.resumeSessionSupport).toBe("unsupported");
     expect(command).not.toContain("--resume");
     expect(command).not.toContain("abc-123");
   });
@@ -955,6 +1004,7 @@ describe("resumeSession on non-Claude providers", () => {
       dangerouslySkipPermissions: true,
       resumeSession: "abc-123",
     });
+    expect(provider.resumeSessionSupport).toBe("unsupported");
     expect(command).not.toContain("--resume");
     expect(command).not.toContain("abc-123");
   });
