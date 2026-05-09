@@ -11,7 +11,11 @@ import type { SandboxError } from "./errors.js";
 import type { SandboxService } from "./SandboxFactory.js";
 import { SandboxFactory, SANDBOX_REPO_DIR } from "./SandboxFactory.js";
 import { withSandboxLifecycle, type SandboxHooks } from "./SandboxLifecycle.js";
-import type { AgentProvider, IterationUsage } from "./AgentProvider.js";
+import {
+  type AgentProvider,
+  type IterationUsage,
+  usesHostCapturedResume,
+} from "./AgentProvider.js";
 import { TextDeltaBuffer } from "./TextDeltaBuffer.js";
 import {
   hostSessionStore,
@@ -127,9 +131,7 @@ const invokeAgent = (
           errorDetail = resultText;
         }
         if (!errorDetail.trim()) {
-          const lines = execResult.stdout
-            .split("\n")
-            .filter((l) => l.trim());
+          const lines = execResult.stdout.split("\n").filter((l) => l.trim());
           errorDetail = lines.slice(-20).join("\n");
         }
         return yield* Effect.fail(
@@ -189,7 +191,7 @@ export interface OrchestrateOptions {
   readonly name?: string;
   /** @internal Test-only override for the idle warning interval in milliseconds. Default: 60000 (1 minute). */
   readonly _idleWarningIntervalMs?: number;
-  /** Resume a prior Claude Code session by ID. Applied to iteration 1 only. */
+  /** Resume a prior agent session by ID. Applied to iteration 1 only. */
   readonly resumeSession?: string;
   /** An AbortSignal that cancels the orchestration when aborted. */
   readonly signal?: AbortSignal;
@@ -276,10 +278,13 @@ export const orchestrate = (
             },
             (ctx) =>
               Effect.gen(function* () {
-                // Resume session: transfer JSONL from host to sandbox before iteration 1
                 const iterationResumeSession =
                   i === 1 ? options.resumeSession : undefined;
-                if (iterationResumeSession && bindMountHandle) {
+                if (
+                  iterationResumeSession &&
+                  bindMountHandle &&
+                  usesHostCapturedResume(provider)
+                ) {
                   yield* display.status(label("Resuming session"), "info");
                   const sbStore = sandboxSessionStore(
                     ctx.sandboxRepoDir,

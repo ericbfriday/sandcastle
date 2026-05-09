@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { claudeCode, codex, opencode, pi } from "./AgentProvider.js";
+import { claudeCode, codex, kiro, opencode, pi } from "./AgentProvider.js";
 import type { AgentCommandOptions } from "./AgentProvider.js";
 
 /** Shorthand: build options with dangerouslySkipPermissions: true (mirrors existing sandbox callers). */
@@ -777,7 +777,202 @@ describe("opencode factory", () => {
   });
 });
 
-describe("resumeSession on non-Claude providers", () => {
+// ---------------------------------------------------------------------------
+// kiro factory
+// ---------------------------------------------------------------------------
+
+describe("kiro factory", () => {
+  it("returns a provider with name 'kiro'", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    expect(provider.name).toBe("kiro");
+  });
+
+  it("does not expose envManifest or dockerfileTemplate", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    expect(provider).not.toHaveProperty("envManifest");
+    expect(provider).not.toHaveProperty("dockerfileTemplate");
+  });
+
+  it("buildPrintCommand emits headless kiro-cli chat invocation", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const { command, stdin } = provider.buildPrintCommand(opts("do something"));
+    expect(command).toContain("kiro-cli chat");
+    expect(command).toContain("--no-interactive");
+    expect(command).toContain("--model 'claude-sonnet-4-6'");
+    expect(command).toContain("'do something'");
+    expect(stdin).toBeUndefined();
+  });
+
+  it("buildPrintCommand includes --trust-all-tools when permissions are skipped", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const { command } = provider.buildPrintCommand(opts("do something"));
+    expect(command).toContain("--trust-all-tools");
+  });
+
+  it("buildPrintCommand omits --trust-all-tools when permissions are not skipped", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const { command } = provider.buildPrintCommand({
+      prompt: "do something",
+      dangerouslySkipPermissions: false,
+    });
+    expect(command).not.toContain("--trust-all-tools");
+  });
+
+  it("buildPrintCommand includes --resume-id when resumeSession is set", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const { command } = provider.buildPrintCommand({
+      prompt: "test",
+      dangerouslySkipPermissions: true,
+      resumeSession: "abc-123",
+    });
+    expect(command).toContain("--resume-id 'abc-123'");
+  });
+
+  it("buildPrintCommand omits --resume-id when resumeSession is not set", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const { command } = provider.buildPrintCommand(opts("test"));
+    expect(command).not.toContain("--resume-id");
+  });
+
+  it("buildPrintCommand shell-escapes the prompt", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const { command } = provider.buildPrintCommand(opts("it's a test"));
+    expect(command).toContain("'it'\\''s a test'");
+  });
+
+  it("buildPrintCommand shell-escapes the model", () => {
+    const provider = kiro("model with spaces");
+    const { command } = provider.buildPrintCommand(opts("test"));
+    expect(command).toContain("--model 'model with spaces'");
+  });
+
+  it("buildInteractiveArgs includes --trust-all-tools when permissions skipped", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const args = provider.buildInteractiveArgs!(opts("hello"));
+    expect(args).toEqual([
+      "kiro-cli",
+      "chat",
+      "--trust-all-tools",
+      "--model",
+      "claude-sonnet-4-6",
+      "hello",
+    ]);
+  });
+
+  it("buildInteractiveArgs omits --trust-all-tools when permissions not skipped", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const args = provider.buildInteractiveArgs!({
+      prompt: "hello",
+      dangerouslySkipPermissions: false,
+    });
+    expect(args).toEqual([
+      "kiro-cli",
+      "chat",
+      "--model",
+      "claude-sonnet-4-6",
+      "hello",
+    ]);
+  });
+
+  it("buildInteractiveArgs omits the prompt when empty", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const args = provider.buildInteractiveArgs!({
+      prompt: "",
+      dangerouslySkipPermissions: true,
+    });
+    expect(args).toEqual([
+      "kiro-cli",
+      "chat",
+      "--trust-all-tools",
+      "--model",
+      "claude-sonnet-4-6",
+    ]);
+  });
+
+  it("parseStreamLine returns empty array for all input (raw passthrough)", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    expect(provider.parseStreamLine("some output text")).toEqual([]);
+    expect(provider.parseStreamLine("")).toEqual([]);
+    expect(
+      provider.parseStreamLine(JSON.stringify({ type: "text", text: "hi" })),
+    ).toEqual([]);
+  });
+
+  it("bakes model into each provider instance independently", () => {
+    const provider1 = kiro("model-a");
+    const provider2 = kiro("model-b");
+    expect(provider1.buildPrintCommand(opts("test")).command).toContain(
+      "model-a",
+    );
+    expect(provider2.buildPrintCommand(opts("test")).command).toContain(
+      "model-b",
+    );
+    expect(provider1.buildPrintCommand(opts("test")).command).not.toContain(
+      "model-b",
+    );
+  });
+
+  it("accepts an env option and exposes it on the provider", () => {
+    const provider = kiro("claude-sonnet-4-6", {
+      env: { KIRO_API_KEY: "kiro-test" },
+    });
+    expect(provider.env).toEqual({ KIRO_API_KEY: "kiro-test" });
+  });
+
+  it("defaults env to empty object when not provided", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    expect(provider.env).toEqual({});
+  });
+});
+
+describe("resumeSession provider contract", () => {
+  it("claudeCode keeps host-captured resume semantics and metadata hooks", () => {
+    const provider = claudeCode("claude-opus-4-6");
+    const { command } = provider.buildPrintCommand({
+      prompt: "test",
+      dangerouslySkipPermissions: true,
+      resumeSession: "abc-123",
+    });
+
+    expect(provider.captureSessions).toBe(true);
+    expect(provider.resumeSessionSupport).toBe("host-captured");
+    expect(provider.parseSessionUsage).toBeDefined();
+    expect(command).toContain("--resume 'abc-123'");
+    expect(
+      provider.parseStreamLine(
+        JSON.stringify({
+          type: "system",
+          subtype: "init",
+          session_id: "abc-123",
+        }),
+      ),
+    ).toEqual([{ type: "session_id", sessionId: "abc-123" }]);
+  });
+
+  it("kiro uses provider-native resume without Claude-style capture metadata", () => {
+    const provider = kiro("claude-sonnet-4-6");
+    const { command } = provider.buildPrintCommand({
+      prompt: "test",
+      dangerouslySkipPermissions: true,
+      resumeSession: "abc-123",
+    });
+
+    expect(provider.captureSessions).toBe(false);
+    expect(provider.resumeSessionSupport).toBe("provider-native");
+    expect(provider.parseSessionUsage).toBeUndefined();
+    expect(command).toContain("--resume-id 'abc-123'");
+    expect(command).not.toContain("--resume 'abc-123'");
+    expect(
+      provider.parseStreamLine(
+        JSON.stringify({
+          type: "system",
+          subtype: "init",
+          session_id: "abc-123",
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it("pi ignores resumeSession in buildPrintCommand", () => {
     const provider = pi("claude-sonnet-4-6");
     const { command } = provider.buildPrintCommand({
@@ -785,6 +980,7 @@ describe("resumeSession on non-Claude providers", () => {
       dangerouslySkipPermissions: true,
       resumeSession: "abc-123",
     });
+    expect(provider.resumeSessionSupport).toBe("unsupported");
     expect(command).not.toContain("--resume");
     expect(command).not.toContain("abc-123");
   });
@@ -796,6 +992,7 @@ describe("resumeSession on non-Claude providers", () => {
       dangerouslySkipPermissions: true,
       resumeSession: "abc-123",
     });
+    expect(provider.resumeSessionSupport).toBe("unsupported");
     expect(command).not.toContain("--resume");
     expect(command).not.toContain("abc-123");
   });
@@ -807,6 +1004,7 @@ describe("resumeSession on non-Claude providers", () => {
       dangerouslySkipPermissions: true,
       resumeSession: "abc-123",
     });
+    expect(provider.resumeSessionSupport).toBe("unsupported");
     expect(command).not.toContain("--resume");
     expect(command).not.toContain("abc-123");
   });
@@ -915,6 +1113,10 @@ describe("parseSessionUsage (Claude Code)", () => {
   it("is not defined on opencode provider", () => {
     expect(opencode("model").parseSessionUsage).toBeUndefined();
   });
+
+  it("is not defined on kiro provider", () => {
+    expect(kiro("model").parseSessionUsage).toBeUndefined();
+  });
 });
 
 describe("captureSessions flag", () => {
@@ -938,5 +1140,9 @@ describe("captureSessions flag", () => {
 
   it("opencode has captureSessions false", () => {
     expect(opencode("opencode-model").captureSessions).toBe(false);
+  });
+
+  it("kiro has captureSessions false", () => {
+    expect(kiro("kiro-model").captureSessions).toBe(false);
   });
 });

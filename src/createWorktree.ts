@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Effect, Layer } from "effect";
 import { hostSessionStore } from "./SessionStore.js";
-import type { AgentProvider } from "./AgentProvider.js";
+import { type AgentProvider, usesHostCapturedResume } from "./AgentProvider.js";
 import { ClackDisplay, Display, FileDisplay } from "./Display.js";
 import { preprocessPrompt } from "./PromptPreprocessor.js";
 import { resolvePrompt } from "./PromptResolver.js";
@@ -138,7 +138,7 @@ export interface WorktreeRunOptions {
   readonly hooks?: SandboxHooks;
   /** Environment variables to inject into the sandbox. */
   readonly env?: Record<string, string>;
-  /** Resume a prior Claude Code session by ID. The session JSONL must exist on the host. Incompatible with maxIterations > 1. */
+  /** Resume a prior agent session by ID. Host-captured providers (`claudeCode()`) require a host session JSONL; provider-native resume (`kiro()`) does not. Incompatible with maxIterations > 1. Ignored by unsupported providers. */
   readonly resumeSession?: string;
   /**
    * An `AbortSignal` that cancels the run when aborted.
@@ -231,7 +231,12 @@ export const createWorktree = async (
       baseBranch,
     });
     if (options.copyToWorktree && options.copyToWorktree.length > 0) {
-      yield* copyToWorktree(options.copyToWorktree, hostRepoDir, info.path, options.timeouts?.copyToWorktreeMs);
+      yield* copyToWorktree(
+        options.copyToWorktree,
+        hostRepoDir,
+        info.path,
+        options.timeouts?.copyToWorktreeMs,
+      );
     }
     // Run host.onWorktreeReady hooks after copyToWorktree, before sandbox creation
     if (options.hooks?.host?.onWorktreeReady?.length) {
@@ -481,7 +486,11 @@ export const createWorktree = async (
       );
     }
 
-    if (opts.resumeSession) {
+    // Only host-captured resume needs a host-side session file. Providers
+    // that resume natively server-side (for example kiro) skip this check.
+    const requiresHostCapturedResumeSessionFile =
+      opts.resumeSession !== undefined && usesHostCapturedResume(provider);
+    if (requiresHostCapturedResumeSessionFile) {
       const hStore = hostSessionStore(hostRepoDir);
       const sessionPath = hStore.sessionFilePath(opts.resumeSession);
       if (!existsSync(sessionPath)) {

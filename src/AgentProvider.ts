@@ -21,7 +21,11 @@ const TOOL_ARG_FIELDS: Record<string, string> = {
 const extractErrorMessage = (obj: any): string | undefined => {
   const err = obj.error;
   if (typeof err === "string") return err;
-  if (typeof err === "object" && err !== null && typeof err.message === "string") {
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    typeof err.message === "string"
+  ) {
     return err.message;
   }
   if (typeof obj.message === "string") return obj.message;
@@ -108,18 +112,28 @@ export interface IterationUsage {
   readonly outputTokens: number;
 }
 
+export type ResumeSessionSupport =
+  | "unsupported"
+  | "provider-native"
+  | "host-captured";
+
 export interface AgentProvider {
   readonly name: string;
   /** Environment variables injected by this agent provider. Merged at launch time with env resolver and sandbox provider env. */
   readonly env: Record<string, string>;
   /** When true, session capture is enabled for this provider. Default: true for Claude Code, false for others. */
   readonly captureSessions: boolean;
+  /** How this provider handles `resumeSession`. */
+  readonly resumeSessionSupport: ResumeSessionSupport;
   buildPrintCommand(options: AgentCommandOptions): PrintCommand;
   buildInteractiveArgs?(options: AgentCommandOptions): string[];
   parseStreamLine(line: string): ParsedStreamEvent[];
   /** Parse token usage from the captured session JSONL content. Only implemented by Claude Code. */
   parseSessionUsage?(content: string): IterationUsage | undefined;
 }
+
+export const usesHostCapturedResume = (provider: AgentProvider): boolean =>
+  provider.resumeSessionSupport === "host-captured";
 
 export const DEFAULT_MODEL = "claude-opus-4-6";
 
@@ -197,6 +211,7 @@ export const pi = (model: string, options?: PiOptions): AgentProvider => ({
   name: "pi",
   env: options?.env ?? {},
   captureSessions: false,
+  resumeSessionSupport: "unsupported",
 
   buildPrintCommand({ prompt }: AgentCommandOptions): PrintCommand {
     return {
@@ -276,6 +291,7 @@ export const codex = (
   name: "codex",
   env: options?.env ?? {},
   captureSessions: false,
+  resumeSessionSupport: "unsupported",
 
   buildPrintCommand({ prompt }: AgentCommandOptions): PrintCommand {
     const effortFlag = options?.effort
@@ -315,6 +331,7 @@ export const opencode = (
   name: "opencode",
   env: options?.env ?? {},
   captureSessions: false,
+  resumeSessionSupport: "unsupported",
 
   buildPrintCommand({ prompt }: AgentCommandOptions): PrintCommand {
     return {
@@ -325,6 +342,52 @@ export const opencode = (
   buildInteractiveArgs({ prompt }: AgentCommandOptions): string[] {
     const args = ["opencode", "--model", model];
     if (prompt) args.push("-p", prompt);
+    return args;
+  },
+
+  parseStreamLine(_line: string): ParsedStreamEvent[] {
+    return [];
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Kiro agent provider
+// ---------------------------------------------------------------------------
+
+/** Options for the kiro agent provider. */
+export interface KiroOptions {
+  /** Environment variables injected by this agent provider. */
+  readonly env?: Record<string, string>;
+}
+
+export const kiro = (model: string, options?: KiroOptions): AgentProvider => ({
+  name: "kiro",
+  env: options?.env ?? {},
+  captureSessions: false,
+  resumeSessionSupport: "provider-native",
+
+  buildPrintCommand({
+    prompt,
+    dangerouslySkipPermissions,
+    resumeSession,
+  }: AgentCommandOptions): PrintCommand {
+    const trustFlag = dangerouslySkipPermissions ? " --trust-all-tools" : "";
+    const resumeFlag = resumeSession
+      ? ` --resume-id ${shellEscape(resumeSession)}`
+      : "";
+    return {
+      command: `kiro-cli chat --no-interactive${trustFlag} --model ${shellEscape(model)}${resumeFlag} ${shellEscape(prompt)}`,
+    };
+  },
+
+  buildInteractiveArgs({
+    prompt,
+    dangerouslySkipPermissions,
+  }: AgentCommandOptions): string[] {
+    const args = ["kiro-cli", "chat"];
+    if (dangerouslySkipPermissions) args.push("--trust-all-tools");
+    args.push("--model", model);
+    if (prompt) args.push(prompt);
     return args;
   },
 
@@ -352,6 +415,7 @@ export const claudeCode = (
   name: "claude-code",
   env: options?.env ?? {},
   captureSessions: options?.captureSessions ?? true,
+  resumeSessionSupport: "host-captured",
 
   buildPrintCommand({
     prompt,
